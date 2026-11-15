@@ -204,6 +204,7 @@ static int g_baudRate = 9600;
 // global mcu time
 static int g_tuyaNextRequestDelay;
 static bool g_sensorMode = 0;
+static int g_tuyaMcu12h = 0;	// 0 = 24h mode, 1 = 12h mode
 
 // Flag to prevent automatic sending during boot/initialization
 static bool g_tuyaMCU_allowAutomaticSending = true;
@@ -773,7 +774,16 @@ void TuyaMCU_Send_SetTime(struct tm* pTime, bool bSensorMode) {
 		// Tuya uses:  Data[1] indicates the month, ranging from 1 to 12.
 		payload_buffer[2] = pTime->tm_mon + 1;
 		payload_buffer[3] = pTime->tm_mday;
-		payload_buffer[4] = pTime->tm_hour;
+		{
+			int hh = pTime->tm_hour;
+			if (g_tuyaMcu12h) {
+				hh = hh % 12;
+				if (hh == 0) {
+					hh = 12;
+				}
+			}
+			payload_buffer[4] = (byte)hh;
+		}
 		payload_buffer[5] = pTime->tm_min;
 		payload_buffer[6] = pTime->tm_sec;
 		// Data[7]: indicates the week, ranging from 1 to 7. 1 indicates Monday.
@@ -2301,6 +2311,18 @@ commandResult_t Cmd_TuyaMCU_SetBatteryAckDelay(const void* context, const char* 
 	return CMD_RES_OK;
 }
 
+commandResult_t Cmd_TuyaMCU_Set12h(const void* context, const char* cmd, const char* args, int cmdFlags) {
+	Tokenizer_TokenizeString(args, 0);
+
+	g_tuyaMcu12h = Tokenizer_GetArgIntegerDefault(0, 1) ? 1 : 0;
+	addLogAdv(LOG_INFO, LOG_FEATURE_TUYAMCU, "TuyaMCU clock mode: %i (1=12h, 0=24h)", g_tuyaMcu12h);
+
+	// push the new clock format to the MCU right away
+	TuyaMCU_Send_SetTime(TuyaMCU_Get_NTP_Time(), false);
+
+	return CMD_RES_OK;
+}
+
 commandResult_t Cmd_TuyaMCU_EnableAutoSend(const void* context, const char* cmd, const char* args, int cmdFlags) {
 	int enable;
 
@@ -2792,6 +2814,8 @@ void TuyaMCU_Init()
 	//cmddetail:"fn":"TuyaMCU_Send_SetTime_Current","file":"driver/drv_tuyaMCU.c","requires":"",
 	//cmddetail:"examples":""}
 	CMD_RegisterCommand("tuyaMcu_sendCurTime", TuyaMCU_Send_SetTime_Current, NULL);
+	//cmddetail:{"name":"tuyaMcu_set12h","args":"[0/1]","descr":"Switch 12/24 hour mode for time sent to the MCU clock display","fn":"Cmd_TuyaMCU_Set12h","file":"driver/drv_tuyaMCU.c","requires":"","examples":""}
+	CMD_RegisterCommand("tuyaMcu_set12h", Cmd_TuyaMCU_Set12h, NULL);
 	//cmddetail:{"name":"linkTuyaMCUOutputToChannel","args":"[dpId][varType][channelID][obkFlags-Optional][mult-optional][bInverse-Optional][delta-Optional][delta2][delta3]",
 	//cmddetail:"descr":"Used to map between TuyaMCU dpIDs and our internal channels. Mult, inverse and delta are for calibration, they are optional. obkFlags is also optional, you can set it to 1 for battery powered devices, so a variable is set with DPCache, for example a sampling interval for humidity/temperature sensor. Mapping works both ways. DpIDs are per-device, you can get them by sniffing UART communication. Vartypes can also be sniffed from Tuya. VarTypes can be following: 0-raw, 1-bool, 2-value, 3-string, 4-enum, 5-bitmap. Please see [Tuya Docs](https://developer.tuya.com/en/docs/iot/tuya-cloud-universal-serial-port-access-protocol?id=K9hhi0xxtn9cb) for info about TuyaMCU. You can also see our [TuyaMCU Analyzer Tool](https://www.elektroda.com/rtvforum/viewtopic.php?p=20528459#20528459)",
 	//cmddetail:"fn":"TuyaMCU_LinkTuyaMCUOutputToChannel","file":"driver/drv_tuyaMCU.c","requires":"",
