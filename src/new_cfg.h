@@ -1,3 +1,4 @@
+// build tag: T1-3S ntpfix3 2026-11-17 (TuyaMCU+IR+NTP+12/24h)
 #ifndef __NEW_CFG_H__
 #define __NEW_CFG_H__
 
