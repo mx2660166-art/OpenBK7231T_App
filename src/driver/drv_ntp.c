@@ -199,7 +199,7 @@ void NTP_SendRequest(bool bBlocking) {
     ptr = (byte*)&packet;
     // Initialize values needed to form NTP request
     // (see URL above for details on the packets)
-    ptr[0] = 0xE3;   // LI, Version, Mode
+    ptr[0] = 0x23;   // LI, Version, Mode
     ptr[1] = 0;     // Stratum, or type of clock
     ptr[2] = 6;     // Polling Interval
     ptr[3] = 0xEC;  // Peer Clock Precision
@@ -229,6 +229,19 @@ void NTP_SendRequest(bool bBlocking) {
 
     g_address.sin_family = AF_INET;
     g_address.sin_addr.s_addr = inet_addr(adrString);
+    if (g_address.sin_addr.s_addr == INADDR_NONE || g_address.sin_addr.s_addr == 0) {
+        struct addrinfo hints, *res = 0;
+        memset(&hints, 0, sizeof(hints));
+        hints.ai_family = AF_INET;
+        hints.ai_socktype = SOCK_DGRAM;
+        if (getaddrinfo(adrString, 0, &hints, &res) == 0 && res) {
+            g_address.sin_addr.s_addr = ((struct sockaddr_in*)res->ai_addr)->sin_addr.s_addr;
+            freeaddrinfo(res);
+            addLogAdv(LOG_INFO, LOG_FEATURE_NTP,"NTP_SendRequest: resolved %s via getaddrinfo", adrString);
+        } else {
+            addLogAdv(LOG_INFO, LOG_FEATURE_NTP,"NTP_SendRequest: cannot resolve %s", adrString);
+        }
+    }
     g_address.sin_port = htons(123);
 
 
@@ -249,7 +262,7 @@ void NTP_SendRequest(bool bBlocking) {
     if(bBlocking == false) {
 #if WINDOWS
 #else
-        if(fcntl(g_ntp_socket, F_SETFL, O_NONBLOCK)) {
+        if(lwip_fcntl(g_ntp_socket, F_SETFL, O_NONBLOCK)) {
             addLogAdv(LOG_INFO, LOG_FEATURE_NTP,"NTP_SendRequest: failed to make socket non-blocking!");
         }
 #endif
@@ -271,12 +284,8 @@ void NTP_CheckForReceive() {
 
     // Receive the server's response:
     i = sizeof(packet);
-#if 0
     recv_len = recvfrom(g_ntp_socket, ptr, i, 0,
          (struct sockaddr*)&g_address, &adrLen);
-#else
-    recv_len = recv(g_ntp_socket, ptr, i, 0);
-#endif
 
     if(recv_len < 0){
 			addLogAdv(LOG_INFO, LOG_FEATURE_NTP,"NTP_CheckForReceive: Error while receiving server's msg");
