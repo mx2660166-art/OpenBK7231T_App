@@ -4,7 +4,8 @@
 #include "new_common.h"
 
 // bart.nexellent.net
-#define DEFAULT_NTP_SERVER "217.147.223.78"
+// China NTP server (www.ntp.org.cn)
+#define DEFAULT_NTP_SERVER "203.107.6.88"
 
 extern int g_cfg_pendingChanges;
 
